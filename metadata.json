@@ -1,0 +1,6 @@
+{
+  "name": "BUGS WAR: Backyard Battlefield",
+  "description": "Multiplayer arcade evolution arena where Centipedes, Ants, and Spiders battle to mutate, sever centipede segments, consume glowing sugar drops, and conquer the backyard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
