@@ -151,18 +151,25 @@ export class CanvasRenderer {
   }
 
   private renderBackyardGround(ctx: CanvasRenderingContext2D) {
+    const halfWidth = this.canvas.width / (2 * this.cameraZoom);
+    const halfHeight = this.canvas.height / (2 * this.cameraZoom);
+    const left = this.cameraX - halfWidth;
+    const right = this.cameraX + halfWidth;
+    const top = this.cameraY - halfHeight;
+    const bottom = this.cameraY + halfHeight;
+
     // Rich garden loam dirt
     ctx.fillStyle = '#0f1711';
-    ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    ctx.fillRect(left, top, right - left, bottom - top);
 
     // Soil grid / garden rows
     ctx.strokeStyle = 'rgba(34, 60, 40, 0.25)';
     ctx.lineWidth = 1;
     const gridSize = 100;
-    const startX = Math.max(0, Math.floor((this.cameraX - 1200) / gridSize) * gridSize);
-    const endX = Math.min(ARENA_WIDTH, Math.ceil((this.cameraX + 1200) / gridSize) * gridSize);
-    const startY = Math.max(0, Math.floor((this.cameraY - 900) / gridSize) * gridSize);
-    const endY = Math.min(ARENA_HEIGHT, Math.ceil((this.cameraY + 900) / gridSize) * gridSize);
+    const startX = Math.floor(left / gridSize) * gridSize;
+    const endX = Math.ceil(right / gridSize) * gridSize;
+    const startY = Math.floor(top / gridSize) * gridSize;
+    const endY = Math.ceil(bottom / gridSize) * gridSize;
 
     ctx.beginPath();
     for (let x = startX; x <= endX; x += gridSize) {
@@ -175,25 +182,22 @@ export class CanvasRenderer {
     }
     ctx.stroke();
 
-    // Mossy soil patches
+    // Procedural moss patches repeat deterministically across the world.
     ctx.fillStyle = 'rgba(22, 60, 32, 0.35)';
-    for (let x = 300; x < ARENA_WIDTH; x += 600) {
-      for (let y = 300; y < ARENA_HEIGHT; y += 600) {
+    const patchSize = 600;
+    for (let tileX = Math.floor(left / patchSize); tileX <= Math.ceil(right / patchSize); tileX++) {
+      for (let tileY = Math.floor(top / patchSize); tileY <= Math.ceil(bottom / patchSize); tileY++) {
+        const seed = Math.sin(tileX * 127.1 + tileY * 311.7) * 43758.5453;
+        const seedFraction = seed - Math.floor(seed);
+        const secondSeed = Math.sin(tileX * 269.5 + tileY * 183.3) * 24634.6345;
+        const secondFraction = secondSeed - Math.floor(secondSeed);
+        const x = tileX * patchSize + 120 + seedFraction * 360;
+        const y = tileY * patchSize + 120 + secondFraction * 360;
         ctx.beginPath();
-        ctx.ellipse(x, y, 160, 110, (x + y) * 0.01, 0, Math.PI * 2);
+        ctx.ellipse(x, y, 120 + seedFraction * 80, 85 + secondFraction * 55, (tileX + tileY) * 0.37, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-
-    // Arena Perimeter Fence / Thorn border
-    ctx.lineWidth = 12;
-    ctx.strokeStyle = '#27272a';
-    ctx.strokeRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
-
-    // Warning barrier hazard stripe
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
-    ctx.strokeRect(8, 8, ARENA_WIDTH - 16, ARENA_HEIGHT - 16);
   }
 
   private renderGrassPatches(ctx: CanvasRenderingContext2D, patches: { id: string; x: number; y: number; radius: number }[]) {

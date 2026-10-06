@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from 'react';
 import { BugPlayer, GiantSugarCrystal } from '../types/game';
-import { ARENA_WIDTH, ARENA_HEIGHT } from '../game/GameEngine';
 import { Compass } from 'lucide-react';
 
 interface MinimapProps {
@@ -19,38 +18,41 @@ export const Minimap: React.FC<MinimapProps> = ({ selfPlayer, players, crystals 
     if (!ctx) return;
 
     const size = canvas.width;
-    const scale = size / ARENA_WIDTH;
+    const center = size / 2;
+    const viewRange = 1000;
+    const scale = size / (viewRange * 2);
+    const worldCenterX = selfPlayer?.x ?? 0;
+    const worldCenterY = selfPlayer?.y ?? 0;
 
-    // Clear
     ctx.clearRect(0, 0, size, size);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(center, center, center - 2, 0, Math.PI * 2);
+    ctx.clip();
 
-    // Map background
     ctx.fillStyle = '#09120b';
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.arc(center, center, center - 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Concentric radar guide circles
     ctx.strokeStyle = 'rgba(16, 185, 129, 0.15)';
     ctx.lineWidth = 1;
     [0.25, 0.5, 0.75].forEach(r => {
       ctx.beginPath();
-      ctx.arc(size / 2, size / 2, (size / 2 - 4) * r, 0, Math.PI * 2);
+      ctx.arc(center, center, (center - 4) * r, 0, Math.PI * 2);
       ctx.stroke();
     });
 
-    // Crosshairs
     ctx.beginPath();
-    ctx.moveTo(size / 2, 0);
-    ctx.lineTo(size / 2, size);
-    ctx.moveTo(0, size / 2);
-    ctx.lineTo(size, size / 2);
+    ctx.moveTo(center, 0);
+    ctx.lineTo(center, size);
+    ctx.moveTo(0, center);
+    ctx.lineTo(size, center);
     ctx.stroke();
 
-    // Giant Sugar Crystals
     for (const crystal of crystals) {
-      const cx = crystal.x * scale;
-      const cy = crystal.y * scale;
+      const cx = center + (crystal.x - worldCenterX) * scale;
+      const cy = center + (crystal.y - worldCenterY) * scale;
 
       ctx.fillStyle = 'rgba(251, 191, 36, 0.4)';
       ctx.beginPath();
@@ -63,11 +65,10 @@ export const Minimap: React.FC<MinimapProps> = ({ selfPlayer, players, crystals 
       ctx.fill();
     }
 
-    // Other Players
     for (const p of players) {
       if (selfPlayer && p.id === selfPlayer.id) continue;
-      const px = p.x * scale;
-      const py = p.y * scale;
+      const px = center + (p.x - worldCenterX) * scale;
+      const py = center + (p.y - worldCenterY) * scale;
 
       ctx.fillStyle = p.faction === 'centipede' ? '#ef4444' : p.faction === 'ant' ? '#f59e0b' : '#a855f7';
       ctx.beginPath();
@@ -75,10 +76,9 @@ export const Minimap: React.FC<MinimapProps> = ({ selfPlayer, players, crystals 
       ctx.fill();
     }
 
-    // Self Player Radar Blip
     if (selfPlayer) {
-      const sx = selfPlayer.x * scale;
-      const sy = selfPlayer.y * scale;
+      const sx = center;
+      const sy = center;
 
       // Pulse ring
       ctx.strokeStyle = '#38bdf8';
@@ -100,12 +100,12 @@ export const Minimap: React.FC<MinimapProps> = ({ selfPlayer, players, crystals 
       ctx.fill();
     }
 
-    // Radar border
     ctx.strokeStyle = '#059669';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.arc(center, center, center - 2, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
   }, [selfPlayer, players, crystals]);
 
   return (
@@ -119,7 +119,7 @@ export const Minimap: React.FC<MinimapProps> = ({ selfPlayer, players, crystals 
       </div>
       <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 font-mono tracking-wider">
         <Compass className="w-3 h-3 text-emerald-400" />
-        <span>RADAR 3.4km²</span>
+        <span>NEARBY RADAR</span>
       </div>
     </div>
   );

@@ -47,6 +47,13 @@ export class GameEngine {
   private nextId = 1;
   private crystalSpawnTimer = 0;
   private botSpawnTimer = 0;
+  private worldChunkTimer = 0;
+  private baseObstacles: ArenaObstacle[] = [];
+  private baseGrassPatches: { id: string; x: number; y: number; radius: number }[] = [];
+  private dynamicWorldChunks = new Map<string, {
+    obstacles: ArenaObstacle[];
+    grassPatches: { id: string; x: number; y: number; radius: number }[];
+  }>();
   public onEvent?: (event: { type: string; payload?: unknown }) => void;
 
   constructor() {
@@ -68,6 +75,8 @@ export class GameEngine {
     this.projectiles = [];
     this.floatingTexts = [];
     this.killFeed = [];
+    this.dynamicWorldChunks.clear();
+    this.worldChunkTimer = 0;
 
     // Seed obstacles (pebbles, twigs, leaves, bottle caps)
     for (let i = 0; i < 45; i++) {
@@ -94,6 +103,9 @@ export class GameEngine {
       });
     }
 
+    this.baseObstacles = this.obstacles.slice();
+    this.baseGrassPatches = this.grassPatches.slice();
+
     // Seed roaming Queen Nectar Wisps (Fireflies)
     for (let i = 0; i < 8; i++) {
       this.spawnFirefly();
@@ -112,10 +124,11 @@ export class GameEngine {
   }
 
   public spawnFirefly() {
+    const center = this.getWorldSpawnCenter();
     this.fireflies.push({
       id: this.generateId('wisp'),
-      x: 300 + Math.random() * (ARENA_WIDTH - 600),
-      y: 300 + Math.random() * (ARENA_HEIGHT - 600),
+      x: center.x + (Math.random() - 0.5) * 1000,
+      y: center.y + (Math.random() - 0.5) * 1000,
       vx: (Math.random() - 0.5) * 80,
       vy: (Math.random() - 0.5) * 80,
       glow: Math.random() * Math.PI * 2
@@ -123,6 +136,7 @@ export class GameEngine {
   }
 
   public spawnSugarDrops(count: number) {
+    const center = this.getWorldSpawnCenter();
     for (let i = 0; i < count; i++) {
       const isCluster = Math.random() < 0.15;
       const type: SugarType = isCluster ? 'cluster' : 'standard';
@@ -132,8 +146,8 @@ export class GameEngine {
 
       this.sugarDrops.push({
         id: this.generateId('sugar'),
-        x: 80 + Math.random() * (ARENA_WIDTH - 160),
-        y: 80 + Math.random() * (ARENA_HEIGHT - 160),
+        x: center.x + (Math.random() - 0.5) * 1400,
+        y: center.y + (Math.random() - 0.5) * 1400,
         value,
         type,
         radius,
@@ -144,10 +158,11 @@ export class GameEngine {
   }
 
   public spawnGiantCrystal(x?: number, y?: number) {
+    const center = this.getWorldSpawnCenter();
     this.giantCrystals.push({
       id: this.generateId('crystal'),
-      x: x ?? (300 + Math.random() * (ARENA_WIDTH - 600)),
-      y: y ?? (300 + Math.random() * (ARENA_HEIGHT - 600)),
+      x: x ?? center.x + (Math.random() - 0.5) * 1200,
+      y: y ?? center.y + (Math.random() - 0.5) * 1200,
       radius: 46,
       hp: 350,
       maxHp: 350,
@@ -155,6 +170,88 @@ export class GameEngine {
       pulseTimer: 0,
       beaconAlpha: 0.9
     });
+  }
+
+  private getWorldSpawnCenter(): { x: number; y: number } {
+    const activePlayers = Array.from(this.players.values()).filter(player => player.hp > 0);
+    const humanPlayers = activePlayers.filter(player => !player.isBot);
+    const candidates = humanPlayers.length > 0 ? humanPlayers : activePlayers;
+    if (candidates.length === 0) {
+      return { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2 };
+    }
+
+    const player = candidates[Math.floor(Math.random() * candidates.length)];
+    return { x: player.x, y: player.y };
+  }
+
+  private updateWorldChunks() {
+    const chunkSize = 1200;
+    const desiredChunks = new Set<string>();
+
+    for (const player of this.players.values()) {
+      if (player.hp <= 0 || player.isBot) continue;
+
+      const centerX = Math.floor(player.x / chunkSize);
+      const centerY = Math.floor(player.y / chunkSize);
+      for (let offsetX = -1; offsetX <= 1; offsetX++) {
+        for (let offsetY = -1; offsetY <= 1; offsetY++) {
+          const chunkX = centerX + offsetX;
+          const chunkY = centerY + offsetY;
+          const fullyInsideStartingArea =
+            chunkX >= 0 &&
+            (chunkX + 1) * chunkSize <= ARENA_WIDTH &&
+            chunkY >= 0 &&
+            (chunkY + 1) * chunkSize <= ARENA_HEIGHT;
+          if (fullyInsideStartingArea) continue;
+
+          const key = `${chunkX},${chunkY}`;
+          desiredChunks.add(key);
+          if (this.dynamicWorldChunks.has(key)) continue;
+
+          let seed = (chunkX * 73856093 ^ chunkY * 19349663) >>> 0;
+          const random = () => {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return seed / 4294967296;
+          };
+          const obstacles: ArenaObstacle[] = [];
+          const obstacleTypes: ArenaObstacle['type'][] = ['pebble', 'twig', 'leaf', 'bottle_cap'];
+
+          for (let i = 0; i < 6; i++) {
+            const type = obstacleTypes[Math.floor(random() * obstacleTypes.length)];
+            obstacles.push({
+              id: this.generateId('obs'),
+              type,
+              x: chunkX * chunkSize + random() * chunkSize,
+              y: chunkY * chunkSize + random() * chunkSize,
+              radius: type === 'leaf' ? 55 : type === 'bottle_cap' ? 38 : type === 'twig' ? 28 : 22,
+              angle: random() * Math.PI * 2,
+              color: type === 'leaf' ? '#4d7c0f' : type === 'bottle_cap' ? '#b91c1c' : '#78716c'
+            });
+          }
+
+          const grassPatches = Array.from({ length: 2 }, () => ({
+            id: this.generateId('grass'),
+            x: chunkX * chunkSize + random() * chunkSize,
+            y: chunkY * chunkSize + random() * chunkSize,
+            radius: 95 + random() * 55
+          }));
+          this.dynamicWorldChunks.set(key, { obstacles, grassPatches });
+        }
+      }
+    }
+
+    for (const key of this.dynamicWorldChunks.keys()) {
+      if (!desiredChunks.has(key)) this.dynamicWorldChunks.delete(key);
+    }
+
+    this.obstacles = [
+      ...this.baseObstacles,
+      ...Array.from(this.dynamicWorldChunks.values()).flatMap(chunk => chunk.obstacles)
+    ];
+    this.grassPatches = [
+      ...this.baseGrassPatches,
+      ...Array.from(this.dynamicWorldChunks.values()).flatMap(chunk => chunk.grassPatches)
+    ];
   }
 
   public createPlayer(
@@ -166,8 +263,9 @@ export class GameEngine {
     y?: number
   ): BugPlayer {
     const stageData = FACTION_DETAILS[faction].stages[1];
-    const px = x ?? (200 + Math.random() * (ARENA_WIDTH - 400));
-    const py = y ?? (200 + Math.random() * (ARENA_HEIGHT - 400));
+    const spawnCenter = this.getWorldSpawnCenter();
+    const px = x ?? spawnCenter.x + (Math.random() - 0.5) * 900;
+    const py = y ?? spawnCenter.y + (Math.random() - 0.5) * 900;
     const angle = Math.random() * Math.PI * 2;
 
     const segments: Segment[] = [];
@@ -355,6 +453,12 @@ export class GameEngine {
   }
 
   public update(dt: number) {
+    this.worldChunkTimer += dt;
+    if (this.worldChunkTimer >= 1) {
+      this.worldChunkTimer = 0;
+      this.updateWorldChunks();
+    }
+
     // 1. Replenish sugar drops if too few
     if (this.sugarDrops.length < 160) {
       this.spawnSugarDrops(30);
@@ -365,7 +469,8 @@ export class GameEngine {
     if (this.giantCrystals.length < 2 && this.crystalSpawnTimer > 18) {
       this.crystalSpawnTimer = 0;
       this.spawnGiantCrystal();
-      this.addFloatingText('💎 GIANT SUGAR CRYSTAL SPAWNED!', ARENA_WIDTH / 2, 200, '#fbbf24', 22);
+      const crystal = this.giantCrystals[this.giantCrystals.length - 1];
+      this.addFloatingText('💎 GIANT SUGAR CRYSTAL SPAWNED!', crystal.x, crystal.y, '#fbbf24', 22);
     }
 
     // 3. Keep bot population populated
@@ -552,11 +657,6 @@ export class GameEngine {
       ff.x += ff.vx * dt;
       ff.y += ff.vy * dt;
 
-      // Arena bounds bounce
-      if (ff.x < 120) { ff.x = 120; ff.vx = Math.abs(ff.vx) + 25; }
-      if (ff.x > ARENA_WIDTH - 120) { ff.x = ARENA_WIDTH - 120; ff.vx = -Math.abs(ff.vx) - 25; }
-      if (ff.y < 120) { ff.y = 120; ff.vy = Math.abs(ff.vy) + 25; }
-      if (ff.y > ARENA_HEIGHT - 120) { ff.y = ARENA_HEIGHT - 120; ff.vy = -Math.abs(ff.vy) - 25; }
     }
 
     if (this.fireflies.length < 6 && Math.random() < 0.04) {
@@ -821,13 +921,6 @@ export class GameEngine {
 
     player.x += player.vx * dt;
     player.y += player.vy * dt;
-
-    // Arena boundary clamp
-    const pad = player.bodyRadius + 20;
-    if (player.x < pad) player.x = pad;
-    if (player.x > ARENA_WIDTH - pad) player.x = ARENA_WIDTH - pad;
-    if (player.y < pad) player.y = pad;
-    if (player.y > ARENA_HEIGHT - pad) player.y = ARENA_HEIGHT - pad;
 
     // Obstacle soft collision
     for (const obs of this.obstacles) {
