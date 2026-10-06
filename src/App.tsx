@@ -19,6 +19,7 @@ type GameState = 'LOBBY' | 'PLAYING';
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('LOBBY');
   const [selfId, setSelfId] = useState<string>('');
+  const selfIdRef = useRef(selfId);
   const [selfPlayer, setSelfPlayer] = useState<BugPlayer | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [autoBite, setAutoBite] = useState<boolean>(true);
@@ -40,9 +41,13 @@ export default function App() {
     webs: [],
     toxicClouds: [],
     projectiles: [],
+    grassPatches: [],
+    fireflies: [],
     leaderboard: [],
     killFeed: []
   });
+  const snapshotRef = useRef(snapshot);
+  const lastUiUpdateRef = useRef(0);
 
   // Canvas & Engine refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -184,17 +189,22 @@ export default function App() {
         try {
           const msg = JSON.parse(e.data);
           if (msg.type === 'joined') {
+            selfIdRef.current = msg.playerId;
             setSelfId(msg.playerId);
             setSelfPlayer(msg.player);
             if (msg.obstacles) wsObstaclesRef.current = msg.obstacles;
           } else if (msg.type === 'snapshot') {
             const snap: GameSnapshot = msg.snapshot;
-            setSnapshot(snap);
+            snapshotRef.current = snap;
             if (msg.obstacles) wsObstaclesRef.current = msg.obstacles;
             if (msg.floatingTexts) wsFloatingTextsRef.current = msg.floatingTexts;
-            const self = snap.players.find(p => p.id === selfId);
+            const self = snap.players.find(p => p.id === selfIdRef.current);
+            if (performance.now() - lastUiUpdateRef.current >= 100) {
+              lastUiUpdateRef.current = performance.now();
+              setSnapshot(snap);
+              if (self) setSelfPlayer(self);
+            }
             if (self) {
-              setSelfPlayer(self);
               if (self.hp <= 0 && !isDeathModalOpen) {
                 setIsDeathModalOpen(true);
                 setKillerName(self.lastDamagedByName || 'Yard Predator');
@@ -231,6 +241,7 @@ export default function App() {
     if (!localEngineRef.current) return;
     const engine = localEngineRef.current;
     const playerId = `local_p_${Date.now()}`;
+    selfIdRef.current = playerId;
     setSelfId(playerId);
     const p = engine.createPlayer(playerId, name, faction, false);
     setSelfPlayer(p);
@@ -264,24 +275,30 @@ export default function App() {
       lastTime = currentTime;
 
       // If running local authoritative engine (no WS or offline)
-      if (!isWsConnectedRef.current && localEngineRef.current) {
+      if (gameState === 'PLAYING' && !isWsConnectedRef.current && localEngineRef.current) {
         const engine = localEngineRef.current;
         if (selfId) {
           engine.applyInput(selfId, currentInputRef.current);
         }
         engine.update(dt);
         const snap = engine.getSnapshot(selfId);
-        setSnapshot(snap);
+        snapshotRef.current = snap;
 
         if (selfId) {
           const self = engine.players.get(selfId);
           if (self) {
-            setSelfPlayer({ ...self });
             if (self.hp <= 0 && !isDeathModalOpen) {
               setIsDeathModalOpen(true);
               setKillerName(self.lastDamagedByName || 'Yard Predator');
             }
           }
+        }
+
+        if (performance.now() - lastUiUpdateRef.current >= 100) {
+          lastUiUpdateRef.current = performance.now();
+          setSnapshot(snap);
+          const self = selfId ? engine.players.get(selfId) : null;
+          if (self) setSelfPlayer({ ...self });
         }
       }
 
@@ -307,7 +324,7 @@ export default function App() {
           ? wsFloatingTextsRef.current
           : (engine ? engine.floatingTexts : []);
 
-        rendererRef.current.render(snapshot, selfId, obstacles, dt, floatingTexts);
+        rendererRef.current.render(snapshotRef.current, selfId, obstacles, dt, floatingTexts);
       }
 
       animId = requestAnimationFrame(loop);
@@ -315,7 +332,7 @@ export default function App() {
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [selfId, snapshot, isDeathModalOpen]);
+  }, [gameState, selfId, isDeathModalOpen]);
 
   // Mouse Input Listeners
   useEffect(() => {
@@ -403,7 +420,7 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [gameState, selfPlayer]);
+  }, [gameState]);
 
   const toggleMute = () => {
     const next = !isMuted;
