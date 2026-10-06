@@ -125,7 +125,7 @@ export const ControlsModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/50 border border-slate-800 text-xs">
               <span className="text-slate-300 font-medium">Movement & Steering</span>
               <span className="font-mono text-emerald-400 bg-emerald-950/40 px-2 py-1 rounded border border-emerald-800/40">
-                Mouse Cursor / Left Joystick
+                Mouse Cursor / WASD / Arrow Keys
               </span>
             </div>
 

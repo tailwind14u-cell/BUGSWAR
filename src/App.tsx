@@ -345,6 +345,24 @@ export default function App() {
       currentInputRef.current.targetAngle = angle;
     };
 
+    const handleSteeringKey = (e: KeyboardEvent) => {
+      const directions: Record<string, number> = {
+        KeyW: -Math.PI / 2,
+        ArrowUp: -Math.PI / 2,
+        KeyD: 0,
+        ArrowRight: 0,
+        KeyS: Math.PI / 2,
+        ArrowDown: Math.PI / 2,
+        KeyA: Math.PI,
+        ArrowLeft: Math.PI
+      };
+      const angle = directions[e.code];
+      if (angle !== undefined) {
+        e.preventDefault();
+        currentInputRef.current.targetAngle = angle;
+      }
+    };
+
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
         // Left Click: Slither Speed Boost & Bite
@@ -404,6 +422,7 @@ export default function App() {
     };
 
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('keydown', handleSteeringKey);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('contextmenu', handleContextMenu);
@@ -413,6 +432,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('keydown', handleSteeringKey);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('contextmenu', handleContextMenu);

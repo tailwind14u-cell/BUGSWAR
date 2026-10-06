@@ -431,7 +431,7 @@ export class GameEngine {
       // Hit checks against players
       let hit = false;
       for (const target of this.players.values()) {
-        if (target.id === p.ownerId || target.isBurrowed) continue;
+        if (target.id === p.ownerId || target.hp <= 0 || target.isBurrowed) continue;
         const dist = Math.hypot(target.x - p.x, target.y - p.y);
         if (dist < target.bodyRadius + p.radius) {
           hit = true;
@@ -1192,7 +1192,7 @@ export class GameEngine {
 
     // Check hit against other players
     for (const target of this.players.values()) {
-      if (target.id === attacker.id || target.isBurrowed) continue;
+      if (target.id === attacker.id || target.hp <= 0 || target.isBurrowed) continue;
 
       // === AUTHORITATIVE CENTIPEDE SEGMENT SEVERING MECHANIC ===
       if (target.faction === 'centipede' && target.segments.length > 2) {
@@ -1290,6 +1290,8 @@ export class GameEngine {
   }
 
   public damagePlayer(victim: BugPlayer, damage: number, attackerId?: string) {
+    if (victim.hp <= 0) return;
+
     const stageData = FACTION_DETAILS[victim.faction].stages[victim.stage];
     const armorReduction = stageData.stats.armor / (stageData.stats.armor + 100);
     const effectiveDamage = Math.max(4, damage * (1 - armorReduction));
