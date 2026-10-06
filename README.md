@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# BUGS WAR: Backyard Battlefield
 
-# Run and deploy your AI Studio app
+BUGS WAR is a multiplayer arcade evolution arena featuring Centipedes, Ants, and Spiders.
 
-This contains everything you need to run your app locally.
+## Run locally
 
-View your app in AI Studio: https://ai.studio/apps/b67109e9-47ad-460e-a7ec-f4b1c9b8720b
+**Prerequisites:** [Bun](https://bun.sh/) (or Node.js with npm)
 
-## Run Locally
+Install dependencies and start the game server:
 
-**Prerequisites:**  Node.js
+```sh
+bun install
+bun run dev
+```
 
+Open <http://localhost:3000>. The server provides multiplayer over WebSockets; if it is unavailable, the game falls back to a local simulation.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Deploy to GitHub Pages
+
+The included GitHub Actions workflow builds and deploys the static game to GitHub Pages whenever changes are pushed to `main`, or when started manually from the Actions tab.
+
+To enable it, open the repository's **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**. After the workflow completes, GitHub Pages will show the published URL.
+
+GitHub Pages hosts only the static frontend. The local simulation works there, but online multiplayer requires deploying `server.ts` to a host that supports persistent Node.js processes and WebSockets. The client currently connects to the WebSocket server on the same origin.
